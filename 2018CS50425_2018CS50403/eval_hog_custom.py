@@ -1,8 +1,3 @@
-# File paths
-train_json_path = 'PennFudanPed_train.json'
-test_json_path = 'PennFudanPed_val.json'
-output_path = 'preds.json'
-
 import cv2
 from imutils.object_detection import non_max_suppression
 import numpy as np
@@ -13,6 +8,22 @@ from sklearn.utils import shuffle
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
+import sys
+import argparse
+import os
+
+parser = argparse.ArgumentParser(description='Evaluation script')
+parser.add_argument('--root', type=str, help='path to root dir')
+parser.add_argument('--test', type=str, help='path to test json')
+parser.add_argument('--out', type=str, help='path to out json')
+parser.add_argument('--model', type=str, help='path to trained model weights')
+
+args = parser.parse_args()
+
+root_dir = args.root
+test_json_path = args.test
+output_path = args.out
+model_path = args.model
 
 # Window parameters
 window_size = (64, 128)
@@ -137,83 +148,8 @@ def non_max_suppression_with_scores(boxes, probs=None, overlapThresh=0.3):
 	# return only the bounding boxes that were picked
 	return boxes[pick].astype("int"), np.array(probs)[pick]
 
-def prepare_dataset():
-    image_paths = {}
-    images_bboxes = {}
-
-    with open(train_json_path, 'r') as f:
-        train_data = json.load(f)
-
-        for img in train_data['images']:
-            image_paths[img['id']] = img['file_name']
-        for ann in train_data['annotations']:
-            if ann['category_id']==1 and ann['ignore']==0:
-                img_id = ann['image_id']
-                if img_id not in images_bboxes:
-                    images_bboxes[img_id] = []
-                images_bboxes[img_id].append(ann['bbox'])
-
-    x_positive = []
-    x_negative = []
-
-    for img_id in image_paths:
-        img = cv2.imread(image_paths[img_id])
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        # Positive samples
-        for bbox in images_bboxes[img_id]:
-            x, y, w, h = map(int, bbox)
-            img_p = img[y:y+h, x:x+w]
-            img_p = cv2.resize(img_p, window_size)
-            x_positive.append(img_p)
-
-        # Negative samples
-        # Try data augmentation, diff window sizes, pyramid etc
-        if img.shape[1] > window_size[0] and img.shape[0] > window_size[1]:
-            for i in range(num_neg):
-                x = np.random.randint(0, img.shape[1] - window_size[0])
-                y = np.random.randint(0, img.shape[0] - window_size[1])
-                non_overlapping = True
-                for bbox in images_bboxes[img_id]:
-                    if iou((x, y, window_size[0], window_size[1]), bbox) > iou_thresh:
-                        non_overlapping = False
-                        break
-                if non_overlapping:
-                    img_n = img[y:y+window_size[1], x:x+window_size[0]]
-                    x_negative.append(img_n)
-
-    print('Positive samples:', len(x_positive))
-    print('Negative samples:', len(x_negative))
-
-    x_images = x_positive + x_negative
-    y = [1 for i in range(len(x_positive))] + [0 for i in range(len(x_negative))]
-    x = []
-
-    for i, img in enumerate(x_images):
-        if convert_to_grayscale:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        desc = hog(img, feature_vector=True, multichannel=not(convert_to_grayscale),
-                    orientations=orientations, pixels_per_cell= pixels_per_cell, cells_per_block= cells_per_block,
-                    block_norm=block_norm, transform_sqrt=transform_sqrt)
-        x.append(desc)
-
-    x = np.array(x)
-    y = np.array(y)
-    x, y = shuffle(x, y, random_state=random_state)
-
-    return x, y
-
-
-def train_model(x, y):
-    scaler = StandardScaler()
-    scaler.fit(x)
-    x = scaler.transform(x)
-    model = LinearSVC(tol=tol, C=C, random_state = random_state)
-    model.fit(x, y)
-    return scaler, model
-
 def get_image_predictions(image_id, file_name, model, scaler): 
-    img = cv2.imread(file_name)
+    img = cv2.imread(os.path.join(root_dir, file_name))
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     if convert_to_grayscale:
@@ -281,14 +217,11 @@ def get_and_write_predictions(scaler, model):
 
     return predictions
 
-
-x, y = prepare_dataset()
-
-scaler, model = train_model(x, y)
-
 import pickle
-with open("model.pkl","wb") as f:
-    pickle.dump([model, scaler],f)
+model = None
+scaler = None
+with open(model_path,'rb') as f:
+    model, scaler = pickle.load(f)
 
 # For all val images
-predictions = get_and_write_predictions(scaler, model)
+get_and_write_predictions(scaler, model)
