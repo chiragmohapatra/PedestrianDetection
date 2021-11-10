@@ -26,7 +26,7 @@ output_path = args.out
 model_path = args.model
 
 # Window parameters
-window_size = (64, 128)
+window_size = (128, 256)
 window_stride = 10
 
 # hog paramaters

@@ -91,4 +91,4 @@ for i,(img, img_id) in enumerate(test_loader):
                 })
         
 with open(output_path, 'w') as f_out:
-    json.dump(predictions , f_out)
+  json.dump(predictions , f_out)

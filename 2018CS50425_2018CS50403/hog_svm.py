@@ -1,7 +1,8 @@
 # File paths
-train_json_path = 'PennFudanPed_train.json'
-test_json_path = 'PennFudanPed_val.json'
-output_path = 'preds.json'
+train_json_path = '../PennFudanPed_train.json'
+test_json_path = '../PennFudanPed_val.json'
+output_path = '../preds.json'
+root_dir = '../../pedestrian_detection/'
 
 import cv2
 from imutils.object_detection import non_max_suppression
@@ -13,6 +14,7 @@ from sklearn.utils import shuffle
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
+import os
 
 # Window parameters
 window_size = (64, 128)
@@ -157,7 +159,8 @@ def prepare_dataset():
     x_negative = []
 
     for img_id in image_paths:
-        img = cv2.imread(image_paths[img_id])
+        img = cv2.imread(os.path.join(root_dir, image_paths[img_id]))
+        img = img.astype('uint8')
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         # Positive samples
@@ -291,4 +294,4 @@ with open("model.pkl","wb") as f:
     pickle.dump([model, scaler],f)
 
 # For all val images
-predictions = get_and_write_predictions(scaler, model)
+#predictions = get_and_write_predictions(scaler, model)
